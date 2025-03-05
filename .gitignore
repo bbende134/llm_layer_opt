@@ -176,6 +176,7 @@ mlruns/
 *.json
 *.bin
 *.pt
-*.safetensor
+*.safetensors
 *.txt
+*.pth
 
