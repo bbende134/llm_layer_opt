@@ -170,4 +170,12 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# HUggingface
 mlruns/
+*.pyc
+*.json
+*.bin
+*.pt
+*.safetensor
+*.txt
+

@@ -1,3 +1,4 @@
+#%%
 import pandas as pd
 import torch
 from transformers import (
@@ -5,10 +6,45 @@ from transformers import (
     AutoModelForSequenceClassification, 
     Trainer, 
     TrainingArguments,
-    DataCollatorWithPadding
+    DataCollatorWithPadding,
+    TrainerCallback
 )
 from datasets import Dataset
+import json
+import os
 
+# 4. Define a custom callback to save metrics
+class SaveMetricsCallback(TrainerCallback):
+    def __init__(self, output_dir):
+        self.output_dir = output_dir
+        self.metrics_history = {"train": [], "eval": []}
+        os.makedirs(output_dir, exist_ok=True)
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        # Called whenever logs are generated (e.g., loss)
+        if logs is not None:
+            epoch = state.epoch
+            step = state.global_step
+            log_entry = {"epoch": epoch, "step": step, **logs}
+            if "loss" in logs:  # Training logs
+                self.metrics_history["train"].append(log_entry)
+            elif "eval_loss" in logs:  # Evaluation logs
+                self.metrics_history["eval"].append(log_entry)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        # Save metrics to JSON files at the end of training
+        with open(os.path.join(self.output_dir, "train_metrics.json"), "w") as f:
+            json.dump(self.metrics_history["train"], f, indent=4)
+        with open(os.path.join(self.output_dir, "eval_metrics.json"), "w") as f:
+            json.dump(self.metrics_history["eval"], f, indent=4)
+
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    predictions = predictions.argmax(-1)  # Get predicted class
+    accuracy = (predictions == labels).mean()
+    return {"accuracy": accuracy}
+
+#%%
 def prepare_dataset(
     csv_path, 
     text_column='text', 
@@ -20,14 +56,11 @@ def prepare_dataset(
     """
     # 1. Load CSV
     df = pd.read_csv(csv_path).drop(columns=['class_name']).dropna().drop_duplicates()
-    # df = pd.read_csv("data/train.csv")
     df['text'] = df['text'].apply(lambda x: x.replace('\n', ''))
-    # df = df.rename(columns={'label': 'labels'})
     # Add index column
     df['input_ids'] = range(len(df))
-    df = df.iloc[:, [2, 0, 1]]  # 'Sr.no', 'Maths Score', 'Name'
-    # dataset['train'] = Dataset.from_pandas(df)
-    # unique_labels = len(set(df['labels'].unique()))
+    df = df.iloc[:, [2, 0, 1]] 
+
     # Validate columns
     if text_column not in df.columns:
         raise ValueError(f"Text column '{text_column}' not found. Available columns: {df.columns.tolist()}")
@@ -81,8 +114,11 @@ def prepare_dataset(
         'num_labels': num_labels
     }
 
+#%%
+
 def fine_tune_model(
     csv_path, 
+    layer_freeze,
     text_column='text', 
     label_column='label', 
     model_name="intfloat/e5-small-v2",
@@ -104,6 +140,12 @@ def fine_tune_model(
         model_name, 
         num_labels=dataset_prep['num_labels']
     )
+    for name, param in model.named_parameters():
+        if layer_freeze in name:
+            param.requires_grad = False
+            # print(f"{name}: {'trainable' if param.requires_grad else 'frozen'}")
+    for name, param in model.named_parameters():
+        print(f"{name}: {'trainable' if param.requires_grad else 'frozen'}")
     
     # Training arguments
     training_args = TrainingArguments(
@@ -127,7 +169,9 @@ def fine_tune_model(
         train_dataset=dataset_prep['train_dataset'],
         eval_dataset=dataset_prep['eval_dataset'],
         tokenizer=dataset_prep['tokenizer'],
-        data_collator=dataset_prep['data_collator']
+        data_collator=dataset_prep['data_collator'],
+        compute_metrics=compute_metrics,
+        callbacks=[SaveMetricsCallback(output_dir)],
     )
     
     # Train the model
@@ -137,18 +181,26 @@ def fine_tune_model(
     trainer.save_model(output_dir)
     
     # Evaluate
-    eval_results = trainer.evaluate()
-    print(f"Evaluation Results: {eval_results}")
+    # 9. Save final results manually (optional)
+    final_results = trainer.evaluate()
+    print(f"Evaluation Results: {final_results}")
+
+    with open(os.path.join(output_dir, "final_eval_results.json"), "w") as f:
+        json.dump(final_results, f, indent=4)
     
     return trainer
 
+#%%
 # Example usage
 if __name__ == "__main__":
     try:
         fine_tune_model(
-            csv_path='data/train.csv',  # Replace with your CSV path
+            csv_path='merged_test_train.csv',  # Replace with your CSV path
+            layer_freeze='bert',
             text_column='text',  # Replace with your text column name
-            label_column='label'  # Replace with your label column name
+            label_column='label',  # Replace with your label column name
+            output_dir='./fine_tuned_model_only_classifier_bge',  # Replace with your desired output directory
+            model_name='BAAI/bge-small-en-v1.5'
         )
     except Exception as e:
         print(f"An error occurred: {e}")
