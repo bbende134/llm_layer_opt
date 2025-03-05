@@ -1,0 +1,158 @@
+import pandas as pd
+import torch
+from transformers import (
+    AutoTokenizer, 
+    AutoModelForSequenceClassification, 
+    Trainer, 
+    TrainingArguments,
+    DataCollatorWithPadding
+)
+from datasets import Dataset
+
+def prepare_dataset(
+    csv_path, 
+    text_column='text', 
+    label_column='label', 
+    model_name="intfloat/e5-small-v2"
+):
+    """
+    Comprehensive dataset preparation with modern Hugging Face practices
+    """
+    # 1. Load CSV
+    df = pd.read_csv(csv_path).drop(columns=['class_name']).dropna().drop_duplicates()
+    # df = pd.read_csv("data/train.csv")
+    df['text'] = df['text'].apply(lambda x: x.replace('\n', ''))
+    # df = df.rename(columns={'label': 'labels'})
+    # Add index column
+    df['input_ids'] = range(len(df))
+    df = df.iloc[:, [2, 0, 1]]  # 'Sr.no', 'Maths Score', 'Name'
+    # dataset['train'] = Dataset.from_pandas(df)
+    # unique_labels = len(set(df['labels'].unique()))
+    # Validate columns
+    if text_column not in df.columns:
+        raise ValueError(f"Text column '{text_column}' not found. Available columns: {df.columns.tolist()}")
+    if label_column not in df.columns:
+        raise ValueError(f"Label column '{label_column}' not found. Available columns: {df.columns.tolist()}")
+    
+    # 2. Load tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    
+    # 3. Preprocessing function
+    def preprocess_function(examples):
+        # Tokenize texts
+        tokenized = tokenizer(
+            examples[text_column], 
+            truncation=True, 
+            padding=False  # Let DataCollator handle padding
+        )
+        
+        # Add labels
+        tokenized['labels'] = examples[label_column]
+        
+        return tokenized
+    
+    # 4. Convert to Hugging Face Dataset
+    dataset = Dataset.from_pandas(df)
+    
+    # 5. Tokenize dataset
+    tokenized_dataset = dataset.map(
+        preprocess_function, 
+        batched=True, 
+        remove_columns=dataset.column_names
+    )
+    
+    # 6. Split dataset
+    split_dataset = tokenized_dataset.train_test_split(test_size=0.2)
+    
+    # 7. Prepare data collator
+    data_collator = DataCollatorWithPadding(
+        tokenizer=tokenizer, 
+        padding=True
+    )
+    
+    # 8. Determine number of labels
+    num_labels = len(set(df[label_column]))
+    
+    return {
+        'train_dataset': split_dataset['train'],
+        'eval_dataset': split_dataset['test'],
+        'tokenizer': tokenizer,
+        'data_collator': data_collator,
+        'num_labels': num_labels
+    }
+
+def fine_tune_model(
+    csv_path, 
+    text_column='text', 
+    label_column='label', 
+    model_name="intfloat/e5-small-v2",
+    output_dir="./fine_tuned_model"
+):
+    """
+    Modern fine-tuning approach with updated Hugging Face best practices
+    """
+    # Prepare dataset
+    dataset_prep = prepare_dataset(
+        csv_path, 
+        text_column, 
+        label_column, 
+        model_name
+    )
+    
+    # Load model with precise number of labels
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, 
+        num_labels=dataset_prep['num_labels']
+    )
+    
+    # Training arguments
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=3,
+        per_device_train_batch_size=16,
+        per_device_eval_batch_size=64,
+        warmup_steps=500,
+        weight_decay=0.01,
+        logging_dir="./logs",
+        logging_steps=10,
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+    )
+    
+    # Initialize Trainer with modern approach
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset_prep['train_dataset'],
+        eval_dataset=dataset_prep['eval_dataset'],
+        tokenizer=dataset_prep['tokenizer'],
+        data_collator=dataset_prep['data_collator']
+    )
+    
+    # Train the model
+    trainer.train()
+    
+    # Save the model
+    trainer.save_model(output_dir)
+    
+    # Evaluate
+    eval_results = trainer.evaluate()
+    print(f"Evaluation Results: {eval_results}")
+    
+    return trainer
+
+# Example usage
+if __name__ == "__main__":
+    try:
+        fine_tune_model(
+            csv_path='data/train.csv',  # Replace with your CSV path
+            text_column='text',  # Replace with your text column name
+            label_column='label'  # Replace with your label column name
+        )
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+
+print("Modern Hugging Face Fine-Tuning Script Ready!")
