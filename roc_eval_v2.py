@@ -193,39 +193,39 @@ def main():
     n_classes = len(set(labels))
     print(f"Detected {n_classes} classes in validation data")
     
-    results_dir = 'eval/images'
-    if not os.path.isdir(results_dir):
-        os.makedirs(results_dir)
+    # results_dir = 'eval/images'
+    # if not os.path.isdir(results_dir):
+    #     os.makedirs(results_dir)
 
-    # Process each model
-    for i, model_dir in enumerate(model_dirs):
-        print(f"\nEvaluating model: {model_dir}")
+    # # Process each model
+    # for i, model_dir in enumerate(model_dirs):
+    #     print(f"\nEvaluating model: {model_dir}")
         
-        # Load model and tokenizer
-        try:
-            model = AutoModelForSequenceClassification.from_pretrained(model_dir).to(device)
-            tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        except Exception as e:
-            print(f"Error loading model {model_dir}: {e}")
-            continue
+    #     # Load model and tokenizer
+    #     try:
+    #         model = AutoModelForSequenceClassification.from_pretrained(model_dir).to(device)
+    #         tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    #     except Exception as e:
+    #         print(f"Error loading model {model_dir}: {e}")
+    #         continue
         
-        # Get model predictions
-        predictions = get_model_predictions(model, tokenizer, texts, device)
+    #     # Get model predictions
+    #     predictions = get_model_predictions(model, tokenizer, texts, device)
         
-        # Compute ROC curves and AUC
-        roc_data, micro_auc, macro_auc = compute_multiclass_roc_ovo(labels, predictions, n_classes)
+    #     # Compute ROC curves and AUC
+    #     roc_data, micro_auc, macro_auc = compute_multiclass_roc_ovo(labels, predictions, n_classes)
         
-        # Plot ROC curves
-        plot_fig = plot_multiclass_roc(roc_data, micro_auc, macro_auc, os.path.basename(model_dir), n_classes)
+    #     # Plot ROC curves
+    #     plot_fig = plot_multiclass_roc(roc_data, micro_auc, macro_auc, os.path.basename(model_dir), n_classes)
         
 
-        # Save individual model plot
-        plt.savefig(f'eval/images/roc_curve_{os.path.basename(model_dir)}.pdf', dpi=300, bbox_inches='tight')
-        plt.savefig(f'eval/images/roc_curve_{os.path.basename(model_dir)}.png', dpi=300, bbox_inches='tight')
+    #     # Save individual model plot
+    #     plt.savefig(f'eval/images/roc_curve_{os.path.basename(model_dir)}.pdf', dpi=300, bbox_inches='tight')
+    #     plt.savefig(f'eval/images/roc_curve_{os.path.basename(model_dir)}.png', dpi=300, bbox_inches='tight')
     
     # Create a summary plot comparing all models
     plt.figure(figsize=(10, 8))
-    plt.style.use(['science', 'grid'])
+    plt.style.context(['science', 'nature', 'no-latex'])
     
     # Load and compare all models with their micro-average ROC AUC
     all_models_results = []
@@ -245,7 +245,7 @@ def main():
                 average='micro'
             )
             
-            all_models_results.append((model_name, micro_auc))
+            all_models_results.append((model_name[len("fine_tuned_model_"):], micro_auc))
         except Exception as e:
             print(f"Error processing model {model_dir} for summary: {e}")
     
@@ -254,15 +254,16 @@ def main():
     
     # Plot summary
     plt.barh([r[0] for r in all_models_results], [r[1] for r in all_models_results])
-    plt.xlabel('Micro-Average ROC AUC (OvO)')
-    plt.title('Model Comparison - Multiclass ROC AUC')
-    plt.tight_layout()
+    plt.xlabel('Makro-átlagolt AUROC (OvO)', fontsize=14)
+    plt.ylabel('Modell neve', fontsize=14)
+    plt.title('Többosztályos AUROC makro összehasonlítása a konfigurációknak', fontsize=16)
+    # plt.tight_layout()
     results_dir = 'eval/combined'
     if not os.path.isdir(results_dir):
         os.makedirs(results_dir)
     # Save summary plot
-    plt.savefig('eval/combined/model_comparison_roc_auc.pdf', dpi=300, bbox_inches='tight')
-    plt.savefig('eval/combined/model_comparison_roc_auc.png', dpi=300, bbox_inches='tight')
+    plt.savefig('eval/combined/model_comparison_roc_auc_macro_ovo.pdf', dpi=300, bbox_inches='tight')
+    plt.savefig('eval/combined/model_comparison_roc_auc_macro_ovo.png', dpi=300, bbox_inches='tight')
     
     print("\nEvaluation completed. Results saved as PDF and PNG files.")
 

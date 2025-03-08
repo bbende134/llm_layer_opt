@@ -28,9 +28,9 @@ for d in dirs:
         print(f"Warning: JSON file not found in directory {d}")
 
 # Label the axes and the plot
-plt.xlabel("Epoch")
-plt.ylabel("Hiba [-]")
-plt.title("Tanítási hiba változása a tanítás során")
+plt.xlabel("Epoch", fontsize=14)
+plt.ylabel("Hiba [-]", fontsize=14)
+plt.title("Tanítási hiba változása a tanítás során", fontsize=16)
 plt.legend()
 plt.tight_layout()
 plt.show()
@@ -67,11 +67,12 @@ plt.boxplot(
     showmeans=True,
     showfliers=True,
     widths=0.3,  # Make the boxes narrower
-    meanprops={"marker":"o","markerfacecolor":"green","markeredgecolor":"black","markersize":"5"}
+    meanprops={"marker":"o","markerfacecolor":"green","markeredgecolor":"black","markersize":"5"},
+    
 )
 # plt.xticks(rotation=45)
-plt.ylabel("Tanítási pontosság")
-plt.title("Tanítási pontosságok összehasonlítása")
+plt.ylabel("Tanítási pontosság [-]", fontsize=14)
+plt.title("Tanítási pontosságok összehasonlítása", fontsize=16)
 plt.tight_layout()
 plt.show()
 # %%
