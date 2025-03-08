@@ -180,3 +180,8 @@ mlruns/
 *.txt
 *.pth
 
+# Evaluation
+eval/
+
+# Fine-tuning
+fine_tuned_*/

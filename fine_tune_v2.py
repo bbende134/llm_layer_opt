@@ -30,6 +30,8 @@ class SaveMetricsCallback(TrainerCallback):
                 self.metrics_history["train"].append(log_entry)
             elif "eval_loss" in logs:  # Evaluation logs
                 self.metrics_history["eval"].append(log_entry)
+            elif "accuracy" in logs:
+                self.metrics_history["accuracy"].append(log_entry)
 
     def on_train_end(self, args, state, control, **kwargs):
         # Save metrics to JSON files at the end of training
@@ -119,6 +121,7 @@ def prepare_dataset(
 def fine_tune_model(
     csv_path, 
     layer_freeze,
+    layer_not_freeze,
     text_column='text', 
     label_column='label', 
     model_name="intfloat/e5-small-v2",
@@ -140,12 +143,22 @@ def fine_tune_model(
         model_name, 
         num_labels=dataset_prep['num_labels']
     )
+#     for name, param in model.named_parameters():
+#         param.requires_grad = False 
+# # Stages 1-N: unfreeze encoder layers progressively
+#     for layer_idx in range(min(layer_freeze, 12)):
+#         for param in model.encoder.layer[layer_idx].parameters():
+#             param.requires_grad = True
+#         print(f"Encoder layer {layer_idx} unfrozen")
     for name, param in model.named_parameters():
-        if layer_freeze in name:
+        if layer_freeze not in name: #!! For testing only embedding layer and attention
             param.requires_grad = False
+        if layer_not_freeze in name:
+            param.requires_grad = True
             # print(f"{name}: {'trainable' if param.requires_grad else 'frozen'}")
     for name, param in model.named_parameters():
         print(f"{name}: {'trainable' if param.requires_grad else 'frozen'}")
+
     
     # Training arguments
     training_args = TrainingArguments(
@@ -193,13 +206,15 @@ def fine_tune_model(
 #%%
 # Example usage
 if __name__ == "__main__":
+    # for i in range(12):
     try:
         fine_tune_model(
             csv_path='merged_test_train.csv',  # Replace with your CSV path
-            layer_freeze='bert',
+            layer_freeze='None',  # Replace with your desired layer to freeze
+            layer_not_freeze='encoder.layer.11',  # Replace with your desired layer to not freeze
             text_column='text',  # Replace with your text column name
             label_column='label',  # Replace with your label column name
-            output_dir='./fine_tuned_model_only_classifier_bge',  # Replace with your desired output directory
+            output_dir='./fine_tuned_model_attention11',  # Replace with your desired output directory
             model_name='BAAI/bge-small-en-v1.5'
         )
     except Exception as e:
